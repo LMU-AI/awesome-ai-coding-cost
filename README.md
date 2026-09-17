@@ -1,10 +1,14 @@
 # Awesome AI Coding Cost [![Awesome](https://awesome.re/badge-flat2.svg)](https://github.com/sindresorhus/awesome)
 
-> 按**你遇到的问题**分类的 AI 编程工具配额与成本优化方案清单。每一条都标注 star 数、许可证、最后更新时间，**已停更的项目会明确标出**。
+> **Codex 额度不够怎么办？Claude Code 配额用完、触发 5 小时限流怎么解决？** 这份清单按你遇到的问题分类，收录能直接落地的开源方案：子 Agent 编队省额度、token 用量追踪、上下文压缩、多账号配额管理，以及订阅制与按量计费的取舍。
 >
-> A curated list of quota & cost optimization tools for AI coding agents — **organized by the problem you're hitting**, not by technique. Every entry carries stars, license, and last-update date. **Stale projects are labeled as such.**
+> 每条标注 star 数、许可证、最后更新时间，**已停更的项目明确标出**。附一节配置勘误：一份流传较广的编队配置与上游仓库不一致，低档位照抄反而更烧额度。
+>
+> **Codex / Claude Code quota exhausted? Hit the 5-hour rate limit?** A curated list of quota & cost optimization tools for AI coding agents — **organized by the problem you're hitting**, not by technique. Subagent orchestration, usage tracking, context compression, multi-account management, and subscription vs pay-as-you-go. Every entry carries stars, license, and last-update date.
 
 [English](#english) · 中文（本页）
+
+**关键词**：Codex 额度不够 · Codex 5 小时限流 · Claude Code 配额用完 · Astra 消耗太快 · 子 Agent 省额度 · token 用量监控 · 上下文压缩 · 多账号配额池 · 订阅 vs 按量计费
 
 ---
 
@@ -12,9 +16,15 @@
 
 现有的 token 优化清单大多按**技术手段**分类（prompt caching、KV cache、batch API、学术论文）。但开发者真正的处境通常是这样的：
 
-> 「我选了旗舰模型，跑了两分钟，5 小时的配额就清零了。」
+> 「我选了 GPT-6 Astra，跑了两分钟四十秒，5 小时的配额直接归零。活还没干完，额度先空了。」
 
-这时候需要的不是一份技术综述，是**一个能马上装上去的东西**。所以这份清单按痛点分章，每章直接给可落地的项目。
+或者：
+
+> 「Codex 周限额用完了，`/status` 里显示还要等三小时。」
+> 「Astra 消耗为什么是 Sol 的四倍？官方标称才 2.5 倍。」
+> 「按教程配了子 Agent 编队，额度反而掉得更快。」
+
+这时候需要的不是一份技术综述，是**一个能马上装上去的东西**，以及**哪些方案在什么条件下才真的省**。所以这份清单按痛点分章，每章先说症状，再给可落地的项目和落地前必须知道的前提。
 
 三条收录纪律：
 
@@ -29,6 +39,9 @@
 ## 目录
 
 - [痛点一：旗舰模型把配额烧穿](#痛点一旗舰模型把配额烧穿)
+  - [🔴 编队不必然省额度：wait 轮询是隐藏成本](#-编队不必然省额度wait-轮询是隐藏成本)
+  - [控制 wait 开销的四个配置项](#控制-wait-开销的四个配置项)
+  - [什么时候**不该**用编队](#什么时候不该用编队)
 - [痛点二：不知道钱花在哪](#痛点二不知道钱花在哪)
 - [痛点三：上下文膨胀，越聊越贵](#痛点三上下文膨胀越聊越贵)
 - [痛点四：多账号配额分散](#痛点四多账号配额分散)
@@ -73,6 +86,56 @@
 **原因**：编队里 root 线程是上下文最长的那一条。低档位订阅下，光让旗舰模型跑 root 就能把配额吃掉。所以 Plus 档的正确做法是**旗舰只留在 reviewer 位、且推理强度设 low**。
 
 照抄 Pro 档配置的 Plus 用户，会精确复现「配额两分钟清零」这个问题。详见[错误配置那一节](#️-一份流传较广的错误配置)。
+
+### 🔴 编队不必然省额度：wait 轮询是隐藏成本
+
+这是本节最重要的一条，**大多数「编队省额度」的教程没有提**。
+
+**机制**：子 Agent 在后台跑的时候，root 需要知道它们完成了没有。这个等待过程不是免费的——root 会反复轮询子 Agent 状态，**每次轮询都是一次真实的模型调用**。子 Agent 干得越久，root 空转的轮询开销越大。
+
+官方文档对此有明确说明：
+
+> 「子智能体工作流比同类单智能体运行消耗更多 token，因为每个子智能体都会独立执行模型和工具相关工作。」
+> —— [Codex 官方文档 · Subagents](https://www.codex-docs.com/getting-started/concepts/subagents/)
+
+**社区实测数据**（⚠️ 他人测量，本清单未独立复现）：
+
+| 观测 | 数值 | 来源 |
+|---|---|---|
+| wait 占五小时配额 | **41.2%** | [linux.do #2894195](https://linux.do/t/topic/2894195) |
+| wait 占 Astra 总消耗 | 61.2%，其中纯超时 47.1% | 同上 |
+| Astra vs Sol 官方标称倍率 | 2.5× | OpenAI 定价 |
+| Astra vs Sol **实测**倍率 | **3.9× / 4–5×**（缓存命中 97-98% 下） | [linux.do #2861037](https://linux.do/t/topic/2861037)、[#2861126](https://linux.do/t/topic/2861126) |
+| Pro 20x 档：4 亿 token 吃掉配额 | Astra High **32%** vs Sol High 约 7% | [linux.do #2873230](https://linux.do/t/topic/2873230) |
+
+**这解释了三个此前看起来奇怪的设计**：
+
+1. 为什么 `donvito` 的 Plus 档**把 root 换成便宜模型** —— root 是轮询的发起方，它贵不贵直接决定 wait 开销
+2. 为什么并发默认 **4 而不是 6 或 8** —— 并发越多，root 要轮询的对象越多
+3. 为什么仓库专门提供 `-max-2-subagents` profile —— 把并发压到 2，就是在压轮询成本
+
+### 控制 wait 开销的四个配置项
+
+| 配置项 | 建议 | 说明 |
+|---|---|---|
+| `agents.max_concurrent_threads_per_session` | **从 2–4 起步** | 轮询对象数量的直接上限。别一上来拉到 8 |
+| `agents.max_depth` | **保持默认 1** | 官方警告：调大会让「广泛委派」指令变成反复扇出，token、延迟、本地资源同时上涨 |
+| root 的 `model` | 低档位订阅用**便宜模型** | root 承担轮询开销，也是上下文最长的线程 |
+| root 的 `model_reasoning_effort` | 不要盲目设 `high` / `max` | 每次轮询都按这个强度计费 |
+
+⚠️ `agents.max_threads` 是旧别名，已被 `max_concurrent_threads_per_session` 取代，新配置请用后者。
+
+### 什么时候**不该**用编队
+
+编队有固定开销，任务不够大就是净亏：
+
+- ❌ **子任务之间有依赖** —— 官方判据：*如果子任务不需要知道其他 Agent 的中间结果就能独立完成，才适合并行*。有依赖就会退化成串行 + 轮询开销
+- ❌ **单文件改动、几轮对话的小脚本** —— 编队的固定成本大于收益
+- ❌ **只是想「显得并行」** —— 并发数拉高不等于更快，文件改动还可能冲突
+
+✅ 适合的场景：**中大型工程重构、多模块协同、真正互相独立的子任务**。
+
+📌 **一句话总结**：编队省的是「让旗舰模型干机械活」那部分钱，但引入了「root 空转轮询」这笔新开销。**任务够大、子任务真独立、root 用便宜模型、并发别拉满** —— 四个条件同时满足才是净省。
 
 ---
 
@@ -287,7 +350,7 @@ What helps there isn't a survey — it's something you can install right now.
 
 **Sections** — see the Chinese content above for full tables:
 
-1. **Flagship model burns your quota** → orchestration patterns (expensive model plans, cheap subagents execute)
+1. **Flagship model burns your quota** → orchestration patterns (expensive model plans, cheap subagents execute). ⚠️ **Includes a section most orchestration guides omit**: waiting on subagents is not free — root polls them, and every poll is a real model call. Community measurements put `wait` at **41.2% of a 5-hour quota** and Astra's real consumption at **3.9–5× Sol** versus the 2.5× official ratio (not independently reproduced here)
 2. **You can't tell where the money went** → usage trackers
 3. **Context bloat** → non-destructive compression gateways
 4. **Quota scattered across accounts** → load balancers and consoles
