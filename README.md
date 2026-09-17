@@ -1,6 +1,6 @@
 # Awesome AI Coding Cost [![Awesome](https://awesome.re/badge-flat2.svg)](https://github.com/sindresorhus/awesome)
 
-> **Codex 额度不够怎么办？Claude Code 配额用完、触发 5 小时限流怎么解决？** 这份清单按你遇到的问题分类，收录能直接落地的开源方案：子 Agent 编队省额度、token 用量追踪、上下文压缩、多账号配额管理，以及订阅制与按量计费的取舍。
+> **Codex 额度不够怎么办？GPT-6 Astra 怎么用才不吃 token？配额用完、触发 5 小时限流怎么解决？** 这份清单按你遇到的问题分类，收录能直接落地的方案：推理强度怎么选、哪些开关改一次长期省、子 Agent 编队省额度、token 用量追踪、上下文压缩、多账号配额管理，以及订阅制与按量计费的取舍。
 >
 > 每条标注 star 数、许可证、最后更新时间，**已停更的项目明确标出**。附一节配置勘误：一份流传较广的编队配置与上游仓库不一致，低档位照抄反而更烧额度。
 >
@@ -8,7 +8,7 @@
 
 [English](#english) · 中文（本页）
 
-**关键词**：Codex 额度不够 · Codex 5 小时限流 · Claude Code 配额用完 · Astra 消耗太快 · 子 Agent 省额度 · token 用量监控 · 上下文压缩 · 多账号配额池 · 订阅 vs 按量计费
+**关键词**：Codex 额度不够 · Codex 5 小时限流 · Claude Code 配额用完 · Astra 怎么用不吃 token · Astra 消耗太快 · Astra 推理强度怎么选 · reasoning effort · 子 Agent 省额度 · AGENTS.md 精简 · 实验性上下文管理 · token 用量监控 · 上下文压缩 · 多账号配额池 · 订阅 vs 按量计费
 
 ---
 
@@ -22,6 +22,7 @@
 
 > 「Codex 周限额用完了，`/status` 里显示还要等三小时。」
 > 「Astra 消耗为什么是 Sol 的四倍？官方标称才 2.5 倍。」
+> 「推理强度到底该设哪一档才不吃 token？」
 > 「按教程配了子 Agent 编队，额度反而掉得更快。」
 
 这时候需要的不是一份技术综述，是**一个能马上装上去的东西**，以及**哪些方案在什么条件下才真的省**。所以这份清单按痛点分章，每章先说症状，再给可落地的项目和落地前必须知道的前提。
@@ -42,10 +43,14 @@
   - [🔴 编队不必然省额度：wait 轮询是隐藏成本](#-编队不必然省额度wait-轮询是隐藏成本)
   - [控制 wait 开销的四个配置项](#控制-wait-开销的四个配置项)
   - [什么时候**不该**用编队](#什么时候不该用编队)
-- [痛点二：不知道钱花在哪](#痛点二不知道钱花在哪)
-- [痛点三：上下文膨胀，越聊越贵](#痛点三上下文膨胀越聊越贵)
-- [痛点四：多账号配额分散](#痛点四多账号配额分散)
-- [痛点五：计费方式本身选错了](#痛点五计费方式本身选错了)
+- [痛点二：推理强度设错，或该开的开关没开](#痛点二推理强度设错或该开的开关没开)
+  - [五档推理强度的实际代价](#五档推理强度的实际代价)
+  - [⚠️ 一个反直觉情形：更高强度有时总成本更低](#️-一个反直觉情形更高强度有时总成本更低)
+  - [三个改一次就长期生效的设置](#三个改一次就长期生效的设置)
+- [痛点三：不知道钱花在哪](#痛点三不知道钱花在哪)
+- [痛点四：上下文膨胀，越聊越贵](#痛点四上下文膨胀越聊越贵)
+- [痛点五：多账号配额分散](#痛点五多账号配额分散)
+- [痛点六：计费方式本身选错了](#痛点六计费方式本身选错了)
 - [⚠️ 一份流传较广的错误配置](#️-一份流传较广的错误配置)
 - [附录：识别蹭热度的仓库](#附录识别蹭热度的仓库)
 
@@ -139,7 +144,103 @@
 
 ---
 
-## 痛点二：不知道钱花在哪
+## 痛点二：推理强度设错，或该开的开关没开
+
+**症状**：没配编队、也没多账号，就是单纯觉得「Astra 好贵」。或者反过来——已经很省着用了，额度还是掉得快。
+
+**解法**：这一类不需要装任何东西，**改配置就行，而且改一次长期生效**。
+
+### 五档推理强度的实际代价
+
+`reasoning.effort` 有五档：`low` / `medium` / `high` / `xhigh` / `max`。
+
+**关键认知**：强度**不改变单 token 价格**，它改变的是模型花掉多少 token。所以「调低强度省钱」的本质是「让它少想」。
+
+某次公开测算中单任务的独立成本与质量分（⚠️ 第三方测算，非官方数据）：
+
+| 强度 | 单任务成本 | 质量分 |
+|---|---:|---:|
+| `low` | $0.63 | 49 |
+| `medium` | $1.16 | 52 |
+| `high` | $1.41 | 53 |
+| `xhigh` | $1.85 | 54 |
+| `max` | $2.57 | 55 |
+
+**边际收益递减得非常明显**：`low → medium` 花 0.53 美元买 3 分；`xhigh → max` 花 0.72 美元只买 1 分。
+
+**官方自己的建议**：Agent 编码与研究类任务用 `medium`，复杂调试用 `high`，`xhigh` **只在你的评测显示明确收益时**才用。OpenAI 还特别提到：**先试 Astra 的 `low` 或 `medium`** ——Astra 在 `low` 下可能已经超过上一代在 `high` 下的表现。
+
+📌 **最常见的浪费**：把强度一律设成 `high` 甚至更高，以为「反正更聪明总没坏处」。实际上一个在 `low` 下就能通过验证的短任务，**调高只会让它写更长的解释，不会让它更正确**。
+
+### ⚠️ 一个反直觉情形：更高强度有时总成本更低
+
+这条和上面不矛盾，但条件很严：
+
+**机制**：单次调用更贵，但如果所需的调用**次数**下降得足够多，总成本可以反过来。高强度减少了试错与返工的轮数。
+
+ARC-AGI-3 基准上的一组数据：
+
+| 强度 | 得分 | 总成本 |
+|---|---:|---:|
+| `medium` | 38.6% | $48,090 |
+| `xhigh` | 59.3% | $37,317 |
+| `max` | 62.7% | **$26,098** |
+
+⚠️ **但这个结论不能直接套到你身上**，三个前提必须同时成立：
+
+1. 任务在 `medium` 下**确实存在大量返工**（反复失败、反复重做）
+2. 提高强度**真的减少了调用次数**，不只是想得更久
+3. 产出**达到完成标准** ——「`xhigh` 消耗更低」如果结果不合格，那不叫省
+
+⚠️ 还有一条更要紧的限定：**上面那组数字测的是基准测试的 API 成本，不是订阅制配额的实际扣减行为**。两者的换算关系不公开。所以**不要默认选 `xhigh`**——先在自己的任务上量一遍返工率。
+
+### 三个改一次就长期生效的设置
+
+**① 开启实验性上下文管理**
+
+旧的压缩机制是上下文满了就把整段对话摘要成一份，细节损失大、长会话里会反复重建对任务的理解。新机制给的是 token 预算 + 历史笔记 + 按需取回。
+
+加到 `~/.codex/config.toml`：
+
+```toml
+[features.context_management]
+experimental_mode = true
+```
+
+**改完必须完整重启 Codex**，不重启不生效。
+
+⚠️ 适用范围（据 [openai/codex PR #42385](https://github.com/openai/codex/pull/42385)）：ChatGPT **Plus / Pro / Pro Lite** 且走 Codex 后端。**自定义 provider、自带凭证、非 Codex 端点不支持**——用第三方 API 的场景这个开关用不上。
+
+**② 清理 `AGENTS.md` 与 Skill 描述**
+
+Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则会让它停下来问你，而不是自己判断。具体做法：
+
+- **合并重复规则** ——同一件事在 AGENTS.md 和 Skill 里各写一遍，等于每轮多付一次
+- **精简触发描述** ——触发条件写宽了，Skill 会在不需要的时候被拉起来
+- **减少无条件规则**，换成精确触发 + 明确的完成标准
+- 在提示词里写明「按上下文理解意图，把已授权的工作做完」，减少它反复澄清
+
+📌 这条的收益容易被低估：`AGENTS.md` 是**每轮都进上下文**的，它的冗余会被会话长度放大。
+
+**③ 聊天和编码用不同的入口**
+
+闲聊、搜索、分析这类任务放到 ChatGPT 的对话模式里做 ——**它和 Codex 的配额是完全分开的**。拿 Codex 的额度去聊天，是在烧错的那份预算。
+
+### 这一类的排查顺序
+
+遇到「额度掉得快」，按这个顺序过一遍再去装工具：
+
+1. 强度是不是一律设了 `high` 以上？→ 降到 `medium` 试
+2. 实验性上下文管理开了吗？→ 开，然后完整重启
+3. `AGENTS.md` 有多长、有多少条无条件规则？→ 精简
+4. 是不是在用 Codex 做本该在对话模式做的事？→ 换入口
+5. 以上都做了还是不够 → 再看[编队](#痛点一旗舰模型把配额烧穿)、[压缩](#痛点四上下文膨胀越聊越贵)、[计费方式](#痛点六计费方式本身选错了)
+
+**前四步都是免费的，且不引入任何新依赖。** 先做完这四步，再考虑加东西。
+
+---
+
+## 痛点三：不知道钱花在哪
 
 **症状**：账单出来了，但说不清哪个项目、哪个工具、哪一类操作吃掉了大头。想优化没有抓手。
 
@@ -158,7 +259,7 @@
 
 ---
 
-## 痛点三：上下文膨胀，越聊越贵
+## 痛点四：上下文膨胀，越聊越贵
 
 **症状**：会话越长越贵。工具 schema、文件读取结果、历史对话在每一轮里重复计费，实际有效信息占比越来越低。
 
@@ -174,7 +275,7 @@
 
 ---
 
-## 痛点四：多账号配额分散
+## 痛点五：多账号配额分散
 
 **症状**：手上几个账号，每个都有独立配额窗口，但用的时候只能一个一个切，切换成本高、也看不到总体余量。
 
@@ -191,7 +292,7 @@
 
 ---
 
-## 痛点五：计费方式本身选错了
+## 痛点六：计费方式本身选错了
 
 前面四类都是在**订阅制**的框架内省配额。但有时问题不在配置，在计费方式本身。
 
@@ -204,7 +305,9 @@
 | 适合 | 用量稳定且可预测 | 用量波动大、或需要精确核算 |
 | 风险 | 高强度任务瞬间烧穿 | 失控的 Agent 会烧钱 |
 
-**判断方法**：如果你经常在窗口内触顶、而且优化配置之后还是触顶，那问题可能不是配置——是这个档位的配额量级本身不够。这时候换计费方式比继续调配置有效。
+**判断方法**：如果你经常在窗口内触顶，而且[痛点二那四步免费优化](#这一类的排查顺序)做完、编队也配了，**还是**触顶——那问题可能不是配置，是这个档位的配额量级本身不够。这时候换计费方式比继续调配置有效。
+
+⚠️ 顺带一条与[痛点一](#-编队不必然省额度wait-轮询是隐藏成本)相关的差别：按量计费下没有滚动窗口，所以 wait 轮询那笔开销只是多花一点钱，**不会让你的活干不完**。订阅制下它会直接变成限流。这是计费方式的性质差异，不是配置能消除的。
 
 ### 相关工具
 
@@ -351,10 +454,11 @@ What helps there isn't a survey — it's something you can install right now.
 **Sections** — see the Chinese content above for full tables:
 
 1. **Flagship model burns your quota** → orchestration patterns (expensive model plans, cheap subagents execute). ⚠️ **Includes a section most orchestration guides omit**: waiting on subagents is not free — root polls them, and every poll is a real model call. Community measurements put `wait` at **41.2% of a 5-hour quota** and Astra's real consumption at **3.9–5× Sol** versus the 2.5× official ratio (not independently reproduced here)
-2. **You can't tell where the money went** → usage trackers
-3. **Context bloat** → non-destructive compression gateways
-4. **Quota scattered across accounts** → load balancers and consoles
-5. **Wrong billing model entirely** → subscription vs pay-as-you-go tradeoffs
+2. **Reasoning effort set wrong, or a free switch left off** → the five `reasoning.effort` tiers and their real marginal cost, the counter-intuitive case where *higher* effort lowers total cost (and the three conditions that must hold), plus three settings you change once: `[features.context_management] experimental_mode = true`, trimming `AGENTS.md`, and not burning Codex quota on chat tasks. **The first four fixes here are free and add no dependencies** — do them before installing anything
+3. **You can't tell where the money went** → usage trackers
+4. **Context bloat** → non-destructive compression gateways
+5. **Quota scattered across accounts** → load balancers and consoles
+6. **Wrong billing model entirely** → subscription vs pay-as-you-go tradeoffs
 
 ⚠️ **One important correction**: a widely-reposted Codex orchestration config does **not** match the upstream repo. It pins the flagship model as root at `high` reasoning — while the repo's actual answer for lower subscription tiers is the opposite: **run root on the cheaper model, keep the flagship only as a low-reasoning reviewer**. See [the correction section](#️-一份流传较广的错误配置).
 
