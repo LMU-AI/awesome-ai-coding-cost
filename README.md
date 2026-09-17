@@ -142,6 +142,8 @@
 
 📌 **一句话总结**：编队省的是「让旗舰模型干机械活」那部分钱，但引入了「root 空转轮询」这笔新开销。**任务够大、子任务真独立、root 用便宜模型、并发别拉满** —— 四个条件同时满足才是净省。
 
+> 📖 这一节的完整展开（含四个字段的逐字对照表、wait 轮询的机制说明、以及编队与免费优化的先后顺序）：[《Codex 额度不够怎么办？Astra 怎么用才不吃 token》](https://blog.fulitimes.com/astra-quota-optimization/)
+
 ---
 
 ## 痛点二：推理强度设错，或该开的开关没开
@@ -237,6 +239,8 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 5. 以上都做了还是不够 → 再看[编队](#痛点一旗舰模型把配额烧穿)、[压缩](#痛点四上下文膨胀越聊越贵)、[计费方式](#痛点六计费方式本身选错了)
 
 **前四步都是免费的，且不引入任何新依赖。** 先做完这四步，再考虑加东西。
+
+> 📖 这四步的逐条操作说明，以及「为什么 `xhigh` 有时总成本更低」那个反直觉情形的三个前提：[《Codex 额度不够怎么办？Astra 怎么用才不吃 token》](https://blog.fulitimes.com/astra-quota-optimization/)
 
 ---
 
@@ -406,6 +410,8 @@ curl $BASE_URL/v1/messages \
 - Plus 档配置 → [`profiles/plus/codex/config.toml`](https://github.com/donvito/codex-astra-luna-orchestrator/blob/main/profiles/plus/codex/config.toml)
 
 📌 **通用教训**：这类配置的转载链条很长，**每一跳都可能失真**。照抄之前花两分钟打开仓库原文对一遍——尤其是模型名和推理强度这两个直接决定成本的字段。
+
+> 📖 这份勘误的完整背景与两档配置的角色对照表：[《Codex 额度不够怎么办？Astra 怎么用才不吃 token》](https://blog.fulitimes.com/astra-quota-optimization/)
 
 ---
 
