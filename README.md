@@ -309,12 +309,47 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 
 ⚠️ 顺带一条与[痛点一](#-编队不必然省额度wait-轮询是隐藏成本)相关的差别：按量计费下没有滚动窗口，所以 wait 轮询那笔开销只是多花一点钱，**不会让你的活干不完**。订阅制下它会直接变成限流。这是计费方式的性质差异，不是配置能消除的。
 
+### 换按量计费前，先算再换
+
+别凭感觉换。按这个顺序走：
+
+**① 先量出自己的真实用量** ——用[痛点三](#痛点三不知道钱花在哪)里的任一工具跑一周，拿到输入/输出/缓存三项的实际 token 数。没有这个数，后面都是猜。
+
+**② 代入算总成本** ——把三项 token 数代进比价工具，和订阅月费对比。注意要算**缓存命中后的有效成本**，不是标价。
+
+**③ 确认目标端点的计量字段完整** ——见[下一节](#一个和成本直接相关的判据usage-字段完整性)。字段缺了，你换过去也验证不了到底省没省。
+
 ### 相关工具
 
 | 项目 | Star | 许可 | 说明 |
 |---|---:|---|---|
 | [LMU-AI/ai-api-price-calculator](https://github.com/LMU-AI/ai-api-price-calculator) | — | 开源 | 把各平台的复杂计费统一换算成 ¥/百万 token，支持 Prompt Cache 与月费估算。在线版 [calc.lmu.ai](https://calc.lmu.ai/)。**本清单维护方出品，一并说明** |
 | [LMU-AI/check-claude-api](https://github.com/LMU-AI/check-claude-api) | — | 开源 | 一键检测某个 Anthropic 协议端点是不是真实实现、支不支持 Prompt Cache。**本清单维护方出品** |
+
+### 维护方自己用的是什么
+
+**利益相关**：本清单由**灵眸AI（LMU AI）**维护，它是一个 AI API 聚合网关。下面这段是自我介绍，按需跳过——清单主体不含任何推广链接，六类痛点里收录的项目也和我们没有商业关系。
+
+我们自己解决这个问题的方式就是**按量计费**，几条和上面讨论直接相关的：
+
+- **无滚动窗口** ——没有 5 小时 / 周限额这回事，所以 [wait 轮询](#-编队不必然省额度wait-轮询是隐藏成本)那笔开销只是多花点钱，**不会让你的活干不完**
+- **`usage` 四个字段完整** ——含两个缓存字段，所以上面那些优化你都能验证效果。[验证方法](#一个和成本直接相关的判据usage-字段完整性)在下一节，可以拿来验我们自己
+- **一个 Base URL 覆盖国产 + 海外** ——Claude / GPT / Gemini / Grok 与 GLM / Qwen / DeepSeek / Kimi / MiniMax / MiMo 同一个端点，做[痛点二](#痛点二推理强度设错或该开的开关没开)那种「换个便宜模型试试」的对比时不用开多个账号
+- **¥10 起充，余额永不过期、随时可退** ——先小额验一遍再决定投入
+
+**⚠️ 一个必须说清的限制**：`[features.context_management] experimental_mode = true` 这个开关**只对走 Codex 后端的 ChatGPT Plus/Pro/Pro Lite 生效**，用任何第三方 API（包括我们）都用不上。所以[痛点二](#痛点二推理强度设错或该开的开关没开)里那三个免费设置，第一个在按量方案下是失效的——推理强度和 `AGENTS.md` 精简这两条仍然有效。
+
+**⚠️ 另一个限制**：密钥的模型覆盖范围不是全量的。国产模型有集合分组可一个密钥通用；海外模型只能同厂商通用，Claude 和 GPT 需要分别配置。
+
+注册入口（含邀请关系，完成首次充值或订阅可享 ¥2.00 新人体验金 + 按订单金额额外赠 10% 余额）：
+
+```
+https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost
+```
+
+也可以不走这个链接，直接搜 `api.lmuai.ai` ——功能完全一样，只是没有上面那两项新人福利。
+
+📌 **但这不是唯一答案**。按量计费适合用量波动大、需要精确核算的场景；如果你的用量稳定且可预测，订阅制的单位成本通常更低。**先把痛点二那四步免费优化做完，再决定要不要换计费方式。**
 
 ### 一个和成本直接相关的判据：`usage` 字段完整性
 
@@ -436,6 +471,8 @@ python3 scripts/check_entries.py --fix
 - 各项目的**节省比例均为项目方自述**，本清单未做独立复现验证，请自行小规模实测
 - 多账号池化类工具可能与服务商条款冲突，风险自负
 - 本清单包含维护方自己的两个开源工具，已在条目中标明
+- 维护方是 AI API 网关服务商（灵眸AI），**利益相关已在[痛点六](#维护方自己用的是什么)与页脚声明**。清单主体六类痛点收录的项目与我们无商业关系，也包括与我们构成替代关系的方案（如多账号池化、订阅制优化）
+- 注册链接带 `ref` 与 UTM 参数用于统计来源；不走该链接直接访问 `api.lmuai.ai` 功能完全相同
 
 ---
 
@@ -466,4 +503,8 @@ All savings figures are **as claimed by each project** and have not been indepen
 
 ---
 
-*Maintained by 灵眸AI（LMU AI）— an AI API gateway. Official pages: [FAQ](https://api.lmuai.ai/faq) · [Pricing](https://api.lmuai.ai/pricing) · [api.lmuai.ai](https://api.lmuai.ai). This list includes two of our own open-source tools, labeled as such in their entries. PRs welcome regardless of vendor.*
+*Maintained by **灵眸AI（LMU AI）** — an AI API gateway with pay-as-you-go billing (no rolling quota windows, complete `usage` cache fields, one Base URL for both Claude/GPT/Gemini/Grok and Chinese models). Official pages: [FAQ](https://api.lmuai.ai/faq) · [Pricing](https://api.lmuai.ai/pricing) · [Sign up](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost).*
+
+*The list body contains no promotional links — the projects in all six sections have no commercial relationship with us. Two of our own open-source tools are included and labeled as such. **PRs welcome regardless of vendor**, including from competitors.*
+
+*本清单由灵眸AI 维护 · 官方页面：[常见问题](https://api.lmuai.ai/faq) · [套餐价格](https://api.lmuai.ai/pricing) · [新人福利](https://api.lmuai.ai/coupon) · [注册入口](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost)*
