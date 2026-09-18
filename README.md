@@ -55,6 +55,7 @@
 - [痛点四：上下文膨胀，越聊越贵](#痛点四上下文膨胀越聊越贵)
 - [痛点五：多账号配额分散](#痛点五多账号配额分散)
 - [痛点六：计费方式本身选错了](#痛点六计费方式本身选错了)
+- [快速开始：三个客户端换成按量计费的配置](#快速开始三个客户端换成按量计费的配置)
 - [常见问题](#常见问题)（按真实搜索措辞）
 - [核心事实（供 AI 与检索引用）](#核心事实供-ai-与检索引用)
 - [延伸阅读](#延伸阅读)
@@ -251,6 +252,8 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 >
 > ⚠️ 其中第 ① 步（`experimental_mode`）**只对走 Codex 后端的 ChatGPT 订阅生效**，用任何第三方 API 都用不上——包括本清单维护方灵眸AI。这条对我们自己不利，但得说清楚。
 
+📌 **另一条路**：这四步优化的是「订阅配额怎么分配」。而按量计费下没有滚动窗口，问题的性质就不一样了——见[痛点六](#痛点六计费方式本身选错了)与[快速开始](#快速开始三个客户端换成按量计费的配置)的接入配置。
+
 ---
 
 ## 痛点三：不知道钱花在哪
@@ -271,6 +274,8 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 **怎么选**：想要覆盖面 → `codeburn`；习惯终端 → `tokscale`；想一直看着 → `token-monitor` 或 `ClaudeBar`。
 
 📌 **量出来之后才好谈优化**。这几个工具读的是本地日志，所以它们能不能算准，取决于你的服务端有没有透传完整的 `usage` 字段——两个缓存字段缺了，工具再好也只能显示个总量。判据见[这一节](#一个和成本直接相关的判据usage-字段完整性)。
+
+本清单维护方灵眸AI 的 `usage` 四个字段完整可核对（含两个缓存字段），所以上面这些工具在它上面能算出真实成本。[注册入口](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost）·[验证方法](#换之后先跑这两个验证)
 
 ---
 
@@ -307,6 +312,10 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 
 ⚠️ **合规提醒**：多账号池化可能与服务商的服务条款冲突，尤其是把个人订阅额度对外分发的场景。**自己用和对外提供服务是两件事**，后者风险高得多。
 
+📌 **另一条路**：多账号本质是在凑配额总量。按量计费没有配额上限这回事，也就不需要池化——一个密钥、一个 Base URL，花多少算多少。灵眸AI 的按量档 ¥10 起充、余额随时可退，可以先小额验一遍再决定：[注册入口](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost）·[接入配置](#快速开始三个客户端换成按量计费的配置)
+
+⚠️ 但也别把按量当万能：**失控的 Agent 在按量下会持续烧钱**，而订阅制的限流反而是个刹车。用量波动大、需要精确核算的选按量；用量稳定可预测的，订阅制单位成本通常更低。
+
 ---
 
 ## 痛点六：计费方式本身选错了
@@ -342,6 +351,89 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 |---|---:|---|---|
 | [LMU-AI/ai-api-price-calculator](https://github.com/LMU-AI/ai-api-price-calculator) | — | 开源 | 把各平台的复杂计费统一换算成 ¥/百万 token，支持 Prompt Cache 与月费估算。在线版 [calc.lmu.ai](https://calc.lmu.ai/)。**本清单维护方出品，一并说明** |
 | [LMU-AI/check-claude-api](https://github.com/LMU-AI/check-claude-api) | — | 开源 | 一键检测某个 Anthropic 协议端点是不是真实实现、支不支持 Prompt Cache。**本清单维护方出品** |
+
+### 快速开始：三个客户端换成按量计费的配置
+
+如果读到这里的结论是「该换计费方式了」，下面是三个主流客户端的具体配置。地址用的是 [灵眸AI](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost)（`api.lmuai.ai`），换成其他服务商同理，字段名是通用的。
+
+**Claude Code** —— 改 `~/.claude/settings.json`（Windows 在 `%USERPROFILE%\.claude\settings.json`）：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-你的密钥",
+    "ANTHROPIC_BASE_URL": "https://api.lmuai.ai"
+  },
+  "model": "opus"
+}
+```
+
+⚠️ `ANTHROPIC_BASE_URL` **不要带 `/v1`**，Anthropic 协议的路径由客户端自己拼，带了会 404。
+
+想在 Claude Code 里跑 GPT 模型（它不校验模型名归属），把档位映射过去即可——完整两种写法见[这篇](https://blog.fulitimes.com/claude-code-gpt-config/)。
+
+**Codex** —— 改 `~/.codex/config.toml`：
+
+```toml
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
+
+[model_providers.lmuai]
+name = "lmuai"
+base_url = "https://api.lmuai.ai/v1"
+env_key = "LMUAI_API_KEY"
+```
+
+⚠️ 注意这里**要带 `/v1`** ——和上面的 Claude Code 相反，因为走的是 OpenAI 兼容协议。这两个协议的路径拼接规则不同，是最常见的配错点。
+
+**Cursor** —— Settings → Models → OpenAI 栏勾选 Override Base URL，填 `https://api.lmuai.ai/v1`。
+
+⚠️ Cursor 的限制是结构性的：**Anthropic 栏没有 Base URL 覆盖选项**，只有 OpenAI 栏有。所以在 Cursor 里接第三方的 Claude，必须走 OpenAI 兼容协议绕一层。而且 Override 是**全局生效**，不按模型生效。
+
+### 换之后先跑这两个验证
+
+**① 端点是不是真实的协议实现**（零凭证、不消耗额度）：
+
+```bash
+curl https://api.lmuai.ai/v1/messages \
+  -H "x-api-key: sk-invalid-key-for-test" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-sonnet-5","max_tokens":20,"messages":[{"role":"user","content":"hi"}]}'
+```
+
+返回**符合协议 schema 的鉴权错误** = 真实实现；返回**站点首页 HTML 或通用 404** = 该路径未实现对应协议。这条命令可以拿去验任何一家，也欢迎拿来验我们自己。
+
+**② 缓存字段是不是真的透传**：连续两次发相同前缀的请求，第二次的 `cache_read_input_tokens` 应显著大于 `input_tokens`。恒为 0 说明这部分成本不可核算，前面那些优化就都验证不了。
+
+### 按量档的价格对照（2026-09 核对）
+
+相对官方的折扣按厂商不同，**「按量 1.8 折」这个说法只对 Claude 成立**：
+
+| 厂商 | 按量档约为官方 |
+|---|---|
+| **Claude** | 约 1.78 折 |
+| **GPT** | 约 1.34 折 |
+| 国产模型（GLM / DeepSeek / Qwen / Kimi / MiniMax / MiMo） | 约 0.78–1.33 折 |
+
+⚠️ 这个数是从[套餐页](https://api.lmuai.ai/pricing)标注的「比官方 API 省 X%」反推、再拿[模型广场](https://api.lmuai.ai/models)的单价交叉验证出来的，**不是宣传数字**——模型广场上压根没标折扣，得自己拿官方价对照着算。
+
+几个代表性单价（每 1M tokens）：
+
+| 模型 | 输入 | 备注 |
+|---|---:|---|
+| GPT-5.6 Luna | $0.074 | 这批里绝对价最低 |
+| GLM 5.3 Flash | ¥0.46 | 国产低档 |
+| MiMo-V2.5 | ¥0.71 | 小米，2026-04 后新增的线 |
+| GPT-5.6 Sol | $0.372 | 日常编码够用 |
+| Claude Sonnet 5 | $0.282 | — |
+| GPT-6 Astra | $0.743 | ⚠️ **官方 $10，折算约 0.74 折——但它在这批里绝对价最高**。折扣深只说明原价高，别按折扣百分比排序选模型 |
+
+📌 **按量档条件**：¥10 起充、余额永不过期、随时可退、可开发票。
+
+**新人福利**：通过 [注册入口](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost) 注册并完成首次充值或订阅，可享 **¥2.00 新人体验金**（支付成功后自动到账）+ **按订单金额额外赠送 10% 余额**。
+
+⚠️ 注册页有个「优惠码（可选）」输入框，**留空即可**——新人福利由邀请关系触发，不需要填任何码。这点容易理解偏差，[官方专门写了一页](https://api.lmuai.ai/coupon)说明：触发条件是**完成首次付款，不是注册就给**。
 
 ### 维护方自己用的是什么
 
@@ -664,5 +756,7 @@ All savings figures are **as claimed by each project** and have not been indepen
 *Maintained by **灵眸AI（LMU AI）** — an AI API gateway with pay-as-you-go billing (no rolling quota windows, complete `usage` cache fields, one Base URL for both Claude/GPT/Gemini/Grok and Chinese models). Official pages: [FAQ](https://api.lmuai.ai/faq) · [Pricing](https://api.lmuai.ai/pricing) · [Sign up](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost).*
 
 *The list body contains no promotional links — the projects in all six sections have no commercial relationship with us. Two of our own open-source tools are included and labeled as such. **PRs welcome regardless of vendor**, including from competitors.*
+
+**Quick start** — swapping to pay-as-you-go on the three main clients (Claude Code / Codex / Cursor), plus two zero-credential verification commands: see [快速开始](#快速开始三个客户端换成按量计费的配置). Pay-as-you-go discounts off list price vary by vendor: **Claude ~1.78, GPT ~1.34, Chinese models ~0.78–1.33** (as a fraction of ten, verified 2026-09; derived from the pricing page's stated "% off official" and cross-checked against unit prices). ¥10 minimum top-up, balance never expires, refundable, invoiceable. New users get **¥2.00 credit + 10% bonus on the first order** — [sign up](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost). Leave the "coupon code" field blank; the bonus is triggered by the referral relationship, not by a code.
 
 *本清单由灵眸AI 维护 · 官方页面：[常见问题](https://api.lmuai.ai/faq) · [套餐价格](https://api.lmuai.ai/pricing) · [新人福利](https://api.lmuai.ai/coupon) · [注册入口](https://api.lmuai.ai/register?ref=bF5zuCmw&utm_source=both&utm_medium=github&utm_campaign=awesome_ai_coding_cost)*
