@@ -392,16 +392,23 @@ Astra 对指令比上一代敏感得多，旧文件里模糊或冲突的规则�
 **Codex** —— 改 `~/.codex/config.toml`：
 
 ```toml
+model_provider = "OpenAI"
 model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
+disable_response_storage = true
 
-[model_providers.lmuai]
-name = "lmuai"
-base_url = "https://api.lmuai.ai/v1"
-env_key = "LMUAI_API_KEY"
+[model_providers.OpenAI]
+name = "OpenAI"
+base_url = "https://api.lmuai.ai"
+wire_api = "responses"
+requires_openai_auth = true
 ```
 
-⚠️ 注意这里**要带 `/v1`** ——和上面的 Claude Code 相反，因为走的是 OpenAI 兼容协议。这两个协议的路径拼接规则不同，是最常见的配错点。
+密钥写在 `~/.codex/auth.json`：`{"OPENAI_API_KEY": "sk-你的密钥"}`。
+
+⚠️ **这里 `base_url` 不带 `/v1`** —— 走 `wire_api = "responses"` 时客户端自己拼路径。实测 `https://api.lmuai.ai/v1/v1/responses` 返回 404 兜底页，所以多写一层 `/v1` 会配不通。
+
+📌 **不要从这里总结出「Anthropic 不带、OpenAI 带」这种规律** —— Codex 走 OpenAI 家的 Responses API，基址却不带 `/v1`。`/v1` 加不加**取决于客户端怎么拼路径，不取决于是哪家协议**，只能逐个客户端看文档。
 
 **Cursor** —— Settings → Models → OpenAI 栏勾选 Override Base URL，填 `https://api.lmuai.ai/v1`。
 
